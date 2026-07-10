@@ -1,4 +1,5 @@
-import { readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
 import { basename, relative } from "node:path";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -51,6 +52,29 @@ interface Candidate {
   excerpt: string;
 }
 
+async function readBoundedText(
+  path: string,
+  maxBytes: number,
+): Promise<{ text: string; bytes: number }> {
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) throw new Error("The requested path is not a file.");
+    if (info.size > maxBytes)
+      throw new Error(`File exceeds the ${maxBytes}-byte read limit.`);
+    const buffer = Buffer.alloc(maxBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > maxBytes)
+      throw new Error(`File exceeds the ${maxBytes}-byte read limit.`);
+    return {
+      text: buffer.subarray(0, bytesRead).toString("utf8"),
+      bytes: bytesRead,
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
 function lexicalScore(query: string, text: string): number {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (terms.length === 0) return 0;
@@ -91,11 +115,10 @@ async function candidates(
   const output: Candidate[] = [];
   for (const path of matches.slice(0, maxFiles)) {
     try {
-      const info = await stat(path);
-      if (info.size > 1_000_000) continue;
+      const { text } = await readBoundedText(path, 1_000_000);
       output.push({
         path,
-        excerpt: (await readFile(path, "utf8")).slice(0, 12_000),
+        excerpt: text.slice(0, 12_000),
       });
     } catch {
       // Files can disappear while searching; skip them.
@@ -155,12 +178,8 @@ export function registerFilesystemTools(
     async ({ path, maxBytes }) => {
       try {
         const resolved = await deps.paths.resolve(path);
-        const info = await stat(resolved);
-        if (!info.isFile()) return failure("The requested path is not a file.");
-        if (info.size > maxBytes)
-          return failure(`File exceeds the ${maxBytes}-byte read limit.`);
-        const text = await readFile(resolved, "utf8");
-        return ok(text, { path: resolved, bytes: info.size, text });
+        const { text, bytes } = await readBoundedText(resolved, maxBytes);
+        return ok(text, { path: resolved, bytes, text });
       } catch (error) {
         return failure(error instanceof Error ? error.message : String(error));
       }

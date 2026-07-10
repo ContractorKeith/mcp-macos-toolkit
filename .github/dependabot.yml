@@ -9,6 +9,19 @@ updates:
       time: "08:00"
       timezone: America/New_York
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      - dependency-name: eslint
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@eslint/js"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
     groups:
       production-dependencies:
         dependency-type: production
