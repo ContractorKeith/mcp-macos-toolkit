@@ -1,0 +1,79 @@
+name: Bug report
+description: Report a reproducible problem with a bounded, sanitized example.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, personal files, Calendar/Reminders content, full environment dumps, or security vulnerabilities. Report vulnerabilities privately through SECURITY.md.
+
+  - type: input
+    id: version
+    attributes:
+      label: Toolkit version or commit
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: macOS version, architecture, Node.js version, and MCP client/version.
+      placeholder: macOS 15.x, arm64, Node 24.x, client name/version
+    validations:
+      required: true
+
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or capability group
+      placeholder: filesystem_*, homebrew_*, productivity_*, models_*, macos_*
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Use a temporary directory or fictional data and sanitize paths.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and sanitized stderr
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mutations
+    attributes:
+      label: Does it reproduce with all mutation flags disabled?
+      options:
+        - Yes
+        - No
+        - Not applicable
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checklist
+      options:
+        - label: I removed personal data, secrets, and complete environment dumps.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true
+        - label: I reviewed docs/troubleshooting.md and rebuilt the current checkout.
+          required: true

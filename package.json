@@ -1,0 +1,62 @@
+{
+  "name": "mcp-macos-toolkit",
+  "version": "0.1.0",
+  "description": "First-class macOS tools for local AI agents through the Model Context Protocol.",
+  "type": "module",
+  "bin": {
+    "mcp-macos-toolkit": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run smoke",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "smoke": "node scripts/smoke.mjs",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "mcp",
+    "macos",
+    "apple-silicon",
+    "mlx",
+    "ollama",
+    "homebrew",
+    "ai-agents"
+  ],
+  "author": "Keith Bloemendaal (ContractorKeith)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ContractorKeith/mcp-macos-toolkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ContractorKeith/mcp-macos-toolkit/issues"
+  },
+  "homepage": "https://github.com/ContractorKeith/mcp-macos-toolkit#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "fast-glob": "3.3.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/node": "24.10.10",
+    "eslint": "9.39.2",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.54.0",
+    "vitest": "4.1.0"
+  }
+}

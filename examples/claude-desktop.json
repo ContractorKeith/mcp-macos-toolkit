@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "macos-toolkit": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-macos-toolkit/dist/cli.js"],
+      "env": {
+        "MCP_MACOS_ALLOWED_ROOTS": "/Users/you/Projects:/Users/you/Documents/AgentNotes"
+      }
+    }
+  }
+}
