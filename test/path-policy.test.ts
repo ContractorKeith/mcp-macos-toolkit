@@ -30,4 +30,15 @@ describe("PathPolicy", () => {
       "outside the allowed roots",
     );
   });
+
+  it("returns the canonical target for a symlink that stays inside the root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mcp-macos-root-"));
+    await mkdir(join(root, "actual"));
+    await symlink(join(root, "actual"), join(root, "alias"));
+    const policy = await PathPolicy.create([root]);
+
+    await expect(policy.resolve("alias/note.md")).resolves.toBe(
+      join(await realpath(root), "actual", "note.md"),
+    );
+  });
 });

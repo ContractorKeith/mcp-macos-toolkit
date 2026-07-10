@@ -55,4 +55,25 @@ describe("ProcessRunner", () => {
     expect(result.aborted).toBe(true);
     expect(result.timedOut).toBe(false);
   });
+
+  it("merges explicit child settings into a sanitized environment", async () => {
+    process.env.MCP_MACOS_TEST_SECRET = "do-not-forward";
+    try {
+      const result = await new ProcessRunner().run({
+        command: process.execPath,
+        args: [
+          "-e",
+          "process.stdout.write(JSON.stringify({home: process.env.HOME, custom: process.env.TOOLKIT_CUSTOM, secret: process.env.MCP_MACOS_TEST_SECRET}))",
+        ],
+        env: { TOOLKIT_CUSTOM: "local-only" },
+      });
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        home: expect.any(String),
+        custom: "local-only",
+      });
+      expect(result.stdout).not.toContain("do-not-forward");
+    } finally {
+      delete process.env.MCP_MACOS_TEST_SECRET;
+    }
+  });
 });

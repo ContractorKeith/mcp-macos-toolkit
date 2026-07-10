@@ -46,6 +46,9 @@ export async function createToolkitServer(
   registerHomebrewTools(server, {
     runner,
     allowMutations: options.config.allowHomebrewMutations,
+    ...(options.config.toolbeltPath
+      ? { toolbeltPath: options.config.toolbeltPath }
+      : {}),
   });
   registerProductivityTools(server, {
     runner,

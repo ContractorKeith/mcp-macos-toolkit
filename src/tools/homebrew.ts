@@ -1,8 +1,12 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import type { ProcessRequest, ProcessResult } from "../core/process-runner.js";
+import { failure, ok, sanitizeDiagnostic } from "../core/results.js";
 
 interface HomebrewProcessRunner {
   run(request: ProcessRequest): Promise<ProcessResult>;
@@ -11,6 +15,7 @@ interface HomebrewProcessRunner {
 export interface HomebrewToolDependencies {
   runner: HomebrewProcessRunner;
   allowMutations: boolean;
+  toolbeltPath?: string;
 }
 
 interface StructuredResult {
@@ -84,10 +89,17 @@ const mutationAnnotations = {
 const HOMEBREW_PATH = "/opt/homebrew/bin/brew";
 
 function toToolResult(result: StructuredResult): CallToolResult {
+  const safeResult = result.success
+    ? result
+    : {
+        ...result,
+        stdout: "",
+        stderr: sanitizeDiagnostic(result.stderr || result.stdout),
+      };
   return {
-    content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-    structuredContent: { ...result },
-    ...(result.success ? {} : { isError: true }),
+    content: [{ type: "text", text: JSON.stringify(safeResult, null, 2) }],
+    structuredContent: { ...safeResult },
+    ...(safeResult.success ? {} : { isError: true }),
   };
 }
 
@@ -119,6 +131,8 @@ async function runCommand(
   args: readonly string[],
   parse?: (stdout: string) => unknown,
   timeoutMs = 15_000,
+  signal?: AbortSignal,
+  env?: NodeJS.ProcessEnv,
 ): Promise<CallToolResult> {
   try {
     const processResult = await deps.runner.run({
@@ -126,6 +140,8 @@ async function runCommand(
       args,
       timeoutMs,
       maxOutputBytes: 1_000_000,
+      ...(signal ? { signal } : {}),
+      ...(env ? { env } : {}),
     });
     const success = processResult.exitCode === 0 && !processResult.timedOut;
     let data: unknown;
@@ -259,6 +275,85 @@ export function registerHomebrewTools(
   );
 
   server.registerTool(
+    "homebrew_doctor",
+    {
+      title: "Homebrew health check",
+      description:
+        "Run Homebrew's read-only diagnostic checks with automatic updates disabled.",
+      inputSchema: z.object({}),
+      outputSchema: commandOutputSchema,
+      annotations: localReadOnlyAnnotations,
+    },
+    async (_, extra) =>
+      await runCommand(
+        deps,
+        "doctor",
+        ["doctor"],
+        undefined,
+        120_000,
+        extra.signal,
+        {
+          HOMEBREW_NO_AUTO_UPDATE: "1",
+        },
+      ),
+  );
+
+  server.registerTool(
+    "homebrew_toolbelt_status",
+    {
+      title: "CLI Toolbelt Tier Status",
+      description:
+        "Inspect a local homebrew-cli-toolbelt tier and check whether its curated formulae and casks are installed.",
+      inputSchema: z.object({
+        tier: z.enum(["minimal", "intermediate", "full"]).default("minimal"),
+      }),
+      annotations: localReadOnlyAnnotations,
+    },
+    async ({ tier }, extra) => {
+      if (!deps.toolbeltPath) {
+        return failure(
+          "Set MCP_MACOS_TOOLBELT_PATH to a trusted homebrew-cli-toolbelt checkout to inspect curated tiers.",
+        );
+      }
+      const filename =
+        tier === "minimal"
+          ? "Brewfile.minimal"
+          : tier === "intermediate"
+            ? "Brewfile.intermediate"
+            : "Brewfile";
+      const brewfile = join(deps.toolbeltPath, filename);
+      try {
+        const source = await readFile(brewfile, "utf8");
+        const entries = [
+          ...source.matchAll(/^\s*(brew|cask)\s+"([^"]+)"/gmu),
+        ].map(([, type, name]) => ({ type, name }));
+        const check = await deps.runner.run({
+          command: HOMEBREW_PATH,
+          args: ["bundle", "check", "--no-upgrade", `--file=${brewfile}`],
+          timeoutMs: 120_000,
+          maxOutputBytes: 1_000_000,
+          signal: extra.signal,
+          env: { HOMEBREW_NO_AUTO_UPDATE: "1" },
+        });
+        return ok(
+          check.exitCode === 0
+            ? `${tier} toolbelt tier is installed.`
+            : `${tier} toolbelt tier has missing packages.`,
+          {
+            tier,
+            brewfile,
+            complete: check.exitCode === 0,
+            entries,
+            details: sanitizeDiagnostic(check.stdout || check.stderr),
+          },
+        );
+      } catch (error) {
+        return failure(error instanceof Error ? error.message : String(error));
+      }
+    },
+  );
+
+  server.registerTool(
     "homebrew_install",
     {
       title: "Install a Homebrew package",
@@ -278,7 +373,7 @@ export function registerHomebrewTools(
       outputSchema: commandOutputSchema,
       annotations: mutationAnnotations,
     },
-    async ({ name, type, confirm }) => {
+    async ({ name, type, confirm }, extra) => {
       if (!deps.allowMutations) {
         return blockedResult(
           "install",
@@ -294,6 +389,7 @@ export function registerHomebrewTools(
         ["install", `--${type}`, name],
         undefined,
         600_000,
+        extra.signal,
       );
     },
   );

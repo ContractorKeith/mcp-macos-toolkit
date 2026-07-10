@@ -53,6 +53,7 @@ export class PathPolicy {
     if (!this.roots.some((root) => isInside(canonicalExisting, root))) {
       throw new Error(`Path resolves outside the allowed roots: ${input}`);
     }
-    return candidate;
+    const remaining = relative(existing, candidate);
+    return resolve(canonicalExisting, remaining);
   }
 }

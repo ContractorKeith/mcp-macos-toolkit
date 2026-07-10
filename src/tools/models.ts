@@ -1,4 +1,6 @@
-import { access } from "node:fs/promises";
+import { access, lstat, readdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
@@ -59,6 +61,101 @@ export function registerModelTools(server: McpServer, deps: ModelDeps): void {
       return ok(
         `Ollama: ${data.ollama.available ? "available" : "not found"}; MLX LM: ${data.mlxLm.available ? "available" : "not found"}.`,
         data,
+      );
+    },
+  );
+
+  server.registerTool(
+    "models_mlx_list",
+    {
+      title: "List Local MLX Models",
+      description:
+        "List model repositories already present in common local MLX/Hugging Face caches.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+      const cacheRoots = [
+        join(homedir(), ".cache", "huggingface", "hub"),
+        join(homedir(), ".cache", "mlx"),
+      ];
+      const models: Array<{ cache: string; name: string }> = [];
+      for (const cache of cacheRoots) {
+        try {
+          const entries = await readdir(cache, { withFileTypes: true });
+          for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            if (cache.endsWith("hub") && !entry.name.startsWith("models--"))
+              continue;
+            models.push({
+              cache,
+              name: entry.name.replace(/^models--/u, "").replaceAll("--", "/"),
+            });
+          }
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+            return failure(
+              `Unable to inspect local MLX cache: ${String(error)}`,
+            );
+          }
+        }
+      }
+      return ok(
+        `Found ${models.length} locally cached MLX model repositories.`,
+        { models },
+      );
+    },
+  );
+
+  server.registerTool(
+    "models_run_stats",
+    {
+      title: "Local Model Run Statistics",
+      description:
+        "Inspect currently running Ollama and MLX processes without returning prompts or full command lines.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+      const ollama = await firstExecutable([
+        "/opt/homebrew/bin/ollama",
+        "/usr/local/bin/ollama",
+      ]);
+      const [ollamaPs, systemPs] = await Promise.all([
+        ollama
+          ? deps.runner.run({
+              command: ollama,
+              args: ["ps"],
+              timeoutMs: 15_000,
+            })
+          : Promise.resolve(undefined),
+        deps.runner.run({
+          command: "/bin/ps",
+          args: ["-axo", "pid=,etime=,rss=,command="],
+          timeoutMs: 10_000,
+          maxOutputBytes: 2_000_000,
+        }),
+      ]);
+      const mlxProcesses = systemPs.stdout
+        .split("\n")
+        .filter((line) => /(?:mlx_lm|mlx-vlm|mlx\.server)/u.test(line))
+        .map((line) => {
+          const match = line.trim().match(/^(\d+)\s+(\S+)\s+(\d+)\s+/u);
+          return match
+            ? {
+                pid: Number(match[1]),
+                elapsed: match[2],
+                residentMemoryMb: Math.round(Number(match[3]) / 1024),
+              }
+            : undefined;
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+      return ok(
+        `Ollama ${ollamaPs?.exitCode === 0 ? "running-state available" : "not running"}; found ${mlxProcesses.length} MLX processes.`,
+        {
+          ollama: ollamaPs?.exitCode === 0 ? ollamaPs.stdout.trim() : null,
+          mlxProcesses,
+        },
       );
     },
   );
@@ -135,6 +232,17 @@ export function registerModelTools(server: McpServer, deps: ModelDeps): void {
         ]);
         if (!ollama)
           return failure("Ollama is not installed in a supported location.");
+        const installed = await deps.runner.run({
+          command: ollama,
+          args: ["show", model],
+          timeoutMs: 15_000,
+          signal: extra.signal,
+        });
+        if (installed.exitCode !== 0) {
+          return failure(
+            `Ollama model is not installed locally: ${model}. Download it outside this MCP server before running.`,
+          );
+        }
         return fromProcess(
           `Running Ollama model ${model}`,
           await deps.runner.run({
@@ -165,6 +273,7 @@ export function registerModelTools(server: McpServer, deps: ModelDeps): void {
           timeoutMs: 300_000,
           maxOutputBytes: 2_000_000,
           signal: extra.signal,
+          env: { HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1" },
         }),
       );
     },
@@ -188,7 +297,7 @@ export function registerModelTools(server: McpServer, deps: ModelDeps): void {
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -198,6 +307,15 @@ export function registerModelTools(server: McpServer, deps: ModelDeps): void {
       try {
         const inputPath = await deps.paths.resolve(input);
         const outputPath = await deps.paths.resolve(output);
+        await lstat(inputPath);
+        try {
+          await lstat(outputPath);
+          return failure(
+            "Quantization output already exists; choose a new output path.",
+          );
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
         const args = [
           "-m",
           "mlx_lm.convert",

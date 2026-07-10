@@ -66,8 +66,7 @@ export function registerMacosTools(server: McpServer, deps: MacosDeps): void {
         .filter(Boolean)
         .map((name) => ({
           name,
-          allowed:
-            deps.allowedShortcuts.has("*") || deps.allowedShortcuts.has(name),
+          allowed: deps.allowedShortcuts.has(name),
         }));
       return ok(`Found ${shortcuts.length} Shortcuts.`, { shortcuts });
     },
@@ -96,7 +95,7 @@ export function registerMacosTools(server: McpServer, deps: MacosDeps): void {
           "Shortcut execution is disabled. Set MCP_MACOS_ALLOW_SHORTCUTS=true at startup.",
         );
       }
-      if (!deps.allowedShortcuts.has("*") && !deps.allowedShortcuts.has(name)) {
+      if (!deps.allowedShortcuts.has(name)) {
         return failure(`Shortcut is not allowlisted: ${name}`);
       }
       const result = await deps.runner.run({

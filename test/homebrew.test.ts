@@ -259,6 +259,7 @@ describe("Homebrew MCP tools", () => {
         args: ["install", "--formula", "ripgrep"],
         timeoutMs: 600_000,
         maxOutputBytes: 1_000_000,
+        signal: expect.any(AbortSignal),
       },
     ]);
     expect(result.structuredContent).toMatchObject({

@@ -15,11 +15,28 @@ const DEFAULT_IGNORES = [
   "**/.env*",
   "**/.ssh/**",
   "**/.gnupg/**",
+  "**/.aws/**",
+  "**/.azure/**",
+  "**/.config/gcloud/**",
   "**/Library/Keychains/**",
-  "**/*.{pem,key,p12,pfx}",
+  "**/Library/Mail/**",
+  "**/Library/Safari/**",
+  "**/Library/Application Support/Google/Chrome/**",
+  "**/Library/Application Support/Firefox/Profiles/**",
+  "**/*.{pem,key,p12,pfx,kdbx,mobileprovision}",
 ];
 const TEXT_EXTENSIONS =
   "**/*.{md,mdx,txt,json,yaml,yml,toml,ts,tsx,js,jsx,py,rb,go,rs,swift,sh,zsh,css,html}";
+const globPattern = z
+  .string()
+  .max(200)
+  .refine(
+    (pattern) =>
+      !pattern.startsWith("/") &&
+      !pattern.split(/[\\/]/u).includes("..") &&
+      !pattern.includes("\0"),
+    "Glob patterns must stay beneath the selected root",
+  );
 
 interface FilesystemDeps {
   paths: PathPolicy;
@@ -99,7 +116,7 @@ export function registerFilesystemTools(
         "List files beneath an allowed macOS directory without following symlinks.",
       inputSchema: z.object({
         path: z.string().default("."),
-        pattern: z.string().max(200).default("**/*"),
+        pattern: globPattern.default("**/*"),
         limit: z.number().int().min(1).max(500).default(100),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
@@ -159,7 +176,7 @@ export function registerFilesystemTools(
       inputSchema: z.object({
         path: z.string().default("."),
         query: z.string().trim().min(1).max(500),
-        pattern: z.string().max(200).default(TEXT_EXTENSIONS),
+        pattern: globPattern.default(TEXT_EXTENSIONS),
         limit: z.number().int().min(1).max(50).default(20),
       }),
       annotations: { readOnlyHint: true, openWorldHint: false },
@@ -234,6 +251,7 @@ export function registerFilesystemTools(
           timeoutMs: 120_000,
           maxOutputBytes: 10_000_000,
           signal: extra.signal,
+          env: { HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1" },
         });
         if (embedded.exitCode !== 0 || embedded.timedOut) {
           if (provider === "mlx") {

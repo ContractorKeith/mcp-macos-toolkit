@@ -40,7 +40,7 @@ bounded, structured result --> MCP client --> model
 | AppleScript injection                      | Fixed templates and encoded data; no arbitrary scripts                                                |
 | Unauthorized Shortcut                      | Explicit comma-separated allowlist, startup flag, per-call confirmation                               |
 | Unwanted package/productivity/model change | Capability-specific startup flag plus `confirm=true`                                                  |
-| Resource exhaustion                        | Timeouts, output limits, result limits, cancellation, disk-space checks                               |
+| Resource exhaustion                        | Timeouts, output limits, result limits, and cancellation                                              |
 | Protocol corruption                        | MCP protocol only on stdout; diagnostics only on stderr                                               |
 | Data exfiltration                          | Local stdio transport, no telemetry, no silent cloud fallback, narrow roots                           |
 | Prompt injection from local content        | Treat returned content as untrusted, include source metadata, avoid executing discovered instructions |

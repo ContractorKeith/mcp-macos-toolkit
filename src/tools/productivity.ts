@@ -15,8 +15,9 @@ const CALENDAR_LIST_SCRIPT = [
   "repeat with cal in calendars",
   "set end of output to (name of cal)",
   "end repeat",
-  "return output as text",
   "end tell",
+  "set AppleScript's text item delimiters to linefeed",
+  "return output as text",
 ];
 
 const REMINDERS_LIST_SCRIPT = [
@@ -25,9 +26,33 @@ const REMINDERS_LIST_SCRIPT = [
   "repeat with reminderList in lists",
   "set end of output to (name of reminderList)",
   "end repeat",
-  "return output as text",
   "end tell",
+  "set AppleScript's text item delimiters to linefeed",
+  "return output as text",
 ];
+
+const DATE_FROM_PARTS_HANDLER = [
+  "on dateFromParts(argv, startIndex)",
+  "set parsedDate to current date",
+  "set year of parsedDate to (item startIndex of argv as integer)",
+  "set month of parsedDate to (item (startIndex + 1) of argv as integer)",
+  "set day of parsedDate to (item (startIndex + 2) of argv as integer)",
+  "set time of parsedDate to ((item (startIndex + 3) of argv as integer) * 3600 + (item (startIndex + 4) of argv as integer) * 60 + (item (startIndex + 5) of argv as integer))",
+  "return parsedDate",
+  "end dateFromParts",
+];
+
+function dateParts(iso: string): string[] {
+  const date = new Date(iso);
+  return [
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+  ].map(String);
+}
 
 function osascript(
   lines: readonly string[],
@@ -57,7 +82,7 @@ export function registerProductivityTools(
       if (result.exitCode !== 0)
         return fromProcess("Listing calendars", result);
       const calendars = result.stdout
-        .split(", ")
+        .split("\n")
         .map((name) => name.trim())
         .filter(Boolean);
       return ok(`Found ${calendars.length} calendars.`, { calendars });
@@ -84,10 +109,11 @@ export function registerProductivityTools(
         return failure("Calendar queries are limited to a 93-day window.");
       }
       const script = [
+        ...DATE_FROM_PARTS_HANDLER,
         "on run argv",
         "set calendarName to item 1 of argv",
-        "set startDate to date (item 2 of argv)",
-        "set endDate to date (item 3 of argv)",
+        "set startDate to my dateFromParts(argv, 2)",
+        "set endDate to my dateFromParts(argv, 8)",
         "set output to {}",
         'tell application "Calendar"',
         "set matchingEvents to every event of calendar calendarName whose start date ≥ startDate and start date ≤ endDate",
@@ -106,8 +132,8 @@ export function registerProductivityTools(
         command: "/usr/bin/osascript",
         args: osascript(script, [
           calendar,
-          new Date(start).toString(),
-          new Date(end).toString(),
+          ...dateParts(start),
+          ...dateParts(end),
         ]),
         timeoutMs: 20_000,
       });
@@ -145,7 +171,7 @@ export function registerProductivityTools(
       if (result.exitCode !== 0)
         return fromProcess("Listing reminder lists", result);
       const lists = result.stdout
-        .split(", ")
+        .split("\n")
         .map((name) => name.trim())
         .filter(Boolean);
       return ok(`Found ${lists.length} reminder lists.`, { lists });
@@ -230,12 +256,13 @@ export function registerProductivityTools(
       if (Date.parse(end) <= Date.parse(start))
         return failure("Event end must be after its start.");
       const script = [
+        ...DATE_FROM_PARTS_HANDLER,
         "on run argv",
         "set calendarName to item 1 of argv",
         "set eventTitle to item 2 of argv",
-        "set startDate to date (item 3 of argv)",
-        "set endDate to date (item 4 of argv)",
-        "set eventNotes to item 5 of argv",
+        "set startDate to my dateFromParts(argv, 3)",
+        "set endDate to my dateFromParts(argv, 9)",
+        "set eventNotes to item 15 of argv",
         'tell application "Calendar"',
         "tell calendar calendarName",
         "make new event with properties {summary:eventTitle, start date:startDate, end date:endDate, description:eventNotes}",
@@ -251,8 +278,8 @@ export function registerProductivityTools(
           args: osascript(script, [
             calendar,
             title,
-            new Date(start).toString(),
-            new Date(end).toString(),
+            ...dateParts(start),
+            ...dateParts(end),
             notes,
           ]),
           timeoutMs: 20_000,

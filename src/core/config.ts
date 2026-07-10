@@ -21,12 +21,14 @@ export interface ToolkitConfig {
   allowModelMutations: boolean;
   mlxPython: string;
   mlxEmbeddingModel: string;
+  toolbeltPath?: string;
 }
 
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ToolkitConfig {
   const roots = split(env.MCP_MACOS_ALLOWED_ROOTS, delimiter);
+  const toolbeltPath = env.MCP_MACOS_TOOLBELT_PATH?.trim();
   return {
     allowedRoots: (roots.length > 0 ? roots : [process.cwd()]).map((root) =>
       resolve(root),
@@ -41,5 +43,6 @@ export function loadConfig(
     mlxEmbeddingModel:
       env.MCP_MACOS_MLX_EMBED_MODEL?.trim() ||
       "mlx-community/all-MiniLM-L6-v2-4bit",
+    ...(toolbeltPath ? { toolbeltPath: resolve(toolbeltPath) } : {}),
   };
 }

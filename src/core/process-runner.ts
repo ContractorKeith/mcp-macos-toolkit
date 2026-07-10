@@ -31,7 +31,6 @@ const SAFE_ENV_KEYS = [
   "TMPDIR",
   "XDG_CACHE_HOME",
   "HF_HOME",
-  "OLLAMA_HOST",
   "NO_COLOR",
 ] as const;
 
@@ -62,7 +61,7 @@ export class ProcessRunner {
     return await new Promise((resolve, reject) => {
       const child = spawn(request.command, [...(request.args ?? [])], {
         cwd: request.cwd,
-        env: request.env ?? sanitizedEnvironment(process.env),
+        env: { ...sanitizedEnvironment(process.env), ...(request.env ?? {}) },
         shell: false,
         stdio: "pipe",
       });
@@ -71,6 +70,7 @@ export class ProcessRunner {
       let truncated = false;
       let timedOut = false;
       let aborted = false;
+      let forceKillTimer: NodeJS.Timeout | undefined;
 
       child.stdout.on("data", (chunk: Buffer) => {
         const [next, wasTruncated] = appendCapped(
@@ -92,20 +92,26 @@ export class ProcessRunner {
       });
       child.once("error", reject);
 
+      const terminate = (): void => {
+        child.kill("SIGTERM");
+        forceKillTimer ??= setTimeout(() => child.kill("SIGKILL"), 1_000);
+        forceKillTimer.unref();
+      };
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill("SIGTERM");
+        terminate();
       }, timeoutMs);
 
       const abort = (): void => {
         aborted = true;
-        child.kill("SIGTERM");
+        terminate();
       };
       if (request.signal?.aborted) abort();
       else request.signal?.addEventListener("abort", abort, { once: true });
 
       child.once("close", (exitCode) => {
         clearTimeout(timer);
+        if (forceKillTimer) clearTimeout(forceKillTimer);
         request.signal?.removeEventListener("abort", abort);
         resolve({
           exitCode,

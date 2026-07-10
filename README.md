@@ -32,30 +32,34 @@ installation without running the toolbelt's interactive installer or any remote 
 
 ### V0.1 Tool Surface
 
-| Tool                           | Operation                                          | Access                                               |
-| ------------------------------ | -------------------------------------------------- | ---------------------------------------------------- |
-| `macos_system_info`            | Inspect macOS version and architecture             | Read-only                                            |
-| `macos_shortcuts_list`         | List installed and allowlisted Shortcuts           | Read-only                                            |
-| `macos_shortcuts_run`          | Run an exact allowlisted Shortcut                  | Gated + confirmed                                    |
-| `filesystem_list`              | List files beneath an allowed root                 | Read-only                                            |
-| `filesystem_read_text`         | Read a bounded UTF-8 file                          | Read-only                                            |
-| `filesystem_search_text`       | Search text with sensitive-path exclusions         | Read-only                                            |
-| `filesystem_semantic_search`   | Use local MLX embeddings or local lexical fallback | Read-only                                            |
-| `homebrew_status`              | Inspect local Homebrew configuration               | Read-only                                            |
-| `homebrew_search`              | Search the formula/cask catalog                    | Read-only; may use Homebrew network access           |
-| `homebrew_info`                | Read structured package metadata                   | Read-only; may use Homebrew network access           |
-| `homebrew_outdated`            | List outdated installed packages                   | Read-only; may use Homebrew network access           |
-| `homebrew_install`             | Install one validated formula or cask              | Gated + confirmed                                    |
-| `productivity_calendars_list`  | List Calendar names                                | Read-only                                            |
-| `productivity_calendar_events` | List bounded events from one Calendar              | Read-only                                            |
-| `productivity_reminder_lists`  | List Reminders list names                          | Read-only                                            |
-| `productivity_reminders_list`  | List bounded reminders from one list               | Read-only                                            |
-| `productivity_calendar_create` | Create one Calendar event                          | Gated + confirmed                                    |
-| `productivity_reminder_create` | Create one Reminder                                | Gated + confirmed                                    |
-| `models_status`                | Inspect installed Ollama/MLX runtimes              | Read-only                                            |
-| `models_ollama_list`           | List downloaded and running Ollama models          | Read-only                                            |
-| `models_run`                   | Run an already installed Ollama or MLX model       | Gated + confirmed                                    |
-| `models_mlx_quantize`          | Preview or execute bounded local MLX conversion    | Preview is read-only; execution is gated + confirmed |
+| Tool                           | Operation                                           | Access                                               |
+| ------------------------------ | --------------------------------------------------- | ---------------------------------------------------- |
+| `macos_system_info`            | Inspect macOS version and architecture              | Read-only                                            |
+| `macos_shortcuts_list`         | List installed and allowlisted Shortcuts            | Read-only                                            |
+| `macos_shortcuts_run`          | Run an exact allowlisted Shortcut                   | Gated + confirmed                                    |
+| `filesystem_list`              | List files beneath an allowed root                  | Read-only                                            |
+| `filesystem_read_text`         | Read a bounded UTF-8 file                           | Read-only                                            |
+| `filesystem_search_text`       | Search text with sensitive-path exclusions          | Read-only                                            |
+| `filesystem_semantic_search`   | Use local MLX embeddings or local lexical fallback  | Read-only                                            |
+| `homebrew_status`              | Inspect local Homebrew configuration                | Read-only                                            |
+| `homebrew_search`              | Search the formula/cask catalog                     | Read-only; may use Homebrew network access           |
+| `homebrew_info`                | Read structured package metadata                    | Read-only; may use Homebrew network access           |
+| `homebrew_outdated`            | List outdated installed packages                    | Read-only; may use Homebrew network access           |
+| `homebrew_doctor`              | Run Homebrew health diagnostics                     | Read-only                                            |
+| `homebrew_toolbelt_status`     | Inspect a configured CLI toolbelt tier              | Read-only                                            |
+| `homebrew_install`             | Install one validated formula or cask               | Gated + confirmed                                    |
+| `productivity_calendars_list`  | List Calendar names                                 | Read-only                                            |
+| `productivity_calendar_events` | List bounded events from one Calendar               | Read-only                                            |
+| `productivity_reminder_lists`  | List Reminders list names                           | Read-only                                            |
+| `productivity_reminders_list`  | List bounded reminders from one list                | Read-only                                            |
+| `productivity_calendar_create` | Create one Calendar event                           | Gated + confirmed                                    |
+| `productivity_reminder_create` | Create one Reminder                                 | Gated + confirmed                                    |
+| `models_status`                | Inspect installed Ollama/MLX runtimes               | Read-only                                            |
+| `models_ollama_list`           | List downloaded and running Ollama models           | Read-only                                            |
+| `models_mlx_list`              | List locally cached MLX model repositories          | Read-only                                            |
+| `models_run_stats`             | Inspect active Ollama/MLX processes without prompts | Read-only                                            |
+| `models_run`                   | Run an already installed Ollama or MLX model        | Gated + confirmed                                    |
+| `models_mlx_quantize`          | Preview or execute bounded local MLX conversion     | Preview is read-only; execution is gated + confirmed |
 
 ## Quick Start From Source
 
@@ -102,6 +106,7 @@ The launch directory is the only allowed filesystem root when `MCP_MACOS_ALLOWED
 | `MCP_MACOS_ALLOWED_SHORTCUTS`         | Comma-separated names    | Shortcuts the server may run                                       |
 | `MCP_MACOS_ALLOW_SHORTCUTS`           | `true`                   | Enables running allowlisted Shortcuts                              |
 | `MCP_MACOS_ALLOW_HOMEBREW_MUTATIONS`  | `true`                   | Enables Homebrew install operations                                |
+| `MCP_MACOS_TOOLBELT_PATH`             | Absolute directory path  | Optional trusted `homebrew-cli-toolbelt` checkout                  |
 | `MCP_MACOS_ALLOW_PRODUCTIVITY_WRITES` | `true`                   | Enables Calendar and Reminders writes                              |
 | `MCP_MACOS_ALLOW_MODEL_RUNS`          | `true`                   | Enables local model generation                                     |
 | `MCP_MACOS_ALLOW_MODEL_MUTATIONS`     | `true`                   | Enables MLX conversion or quantization execution                   |
@@ -149,9 +154,9 @@ Text search works without MLX. Semantic search is optional and remains local to 
 1. Create or select a Python environment with the required MLX embedding dependencies.
 2. Set `MCP_MACOS_MLX_PYTHON` to its absolute Python executable.
 3. Optionally change `MCP_MACOS_MLX_EMBED_MODEL`.
-4. Allow the initial model download only if you trust the selected model source and have reviewed its disk requirements.
+4. Download the selected model in that Python environment yourself after reviewing its source and disk requirements.
 
-The default embedding model is `mlx-community/all-MiniLM-L6-v2-4bit`. The server does not silently fall back to a cloud embedding API.
+The default embedding model is `mlx-community/all-MiniLM-L6-v2-4bit`. The server forces the embedding helper into offline mode: it does not silently download a model or fall back to a cloud API.
 
 ## Development
 

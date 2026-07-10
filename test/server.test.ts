@@ -82,6 +82,8 @@ describe("toolkit MCP server", () => {
         "productivity_reminder_lists",
         "productivity_reminders_list",
         "models_status",
+        "models_mlx_list",
+        "models_run_stats",
         "models_mlx_quantize",
       ]),
     );
@@ -102,6 +104,12 @@ describe("toolkit MCP server", () => {
       provider: "lexical",
       matches: [expect.objectContaining({ path: "release-notes.md" })],
     });
+
+    const traversalPattern = await client.callTool({
+      name: "filesystem_list",
+      arguments: { path: ".", pattern: "../*" },
+    });
+    expect(traversalPattern.isError).toBe(true);
 
     const blockedShortcut = await client.callTool({
       name: "macos_shortcuts_run",
